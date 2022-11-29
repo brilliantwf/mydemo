@@ -2,7 +2,7 @@ const express = require('express')
 const app = express()
 const port = process.env['PORT'] || 8080
 const aws = require('aws-sdk');
-const queueUrl = "https://sqs.us-east-1.amazonaws.com/544592066775/MyTestSQS";
+const queueUrl = "https://sqs.us-east-1.amazonaws.com/account/MyTestSQS";
 const receipt = "";
 aws.config.loadFromPath(__dirname + '/config.json');
 var sqs = new aws.SQS({ apiVersion: '2012-11-05' });

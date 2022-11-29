@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "nodejsapp"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1voat6m8oopjj"
+s3_prefix = "nodejsapp"
+region = "ap-northeast-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = ["ExpressFunction=544592066775.dkr.ecr.ap-northeast-1.amazonaws.com/nodejsapp5791581f/expressfunction9fcbc1barepo"]

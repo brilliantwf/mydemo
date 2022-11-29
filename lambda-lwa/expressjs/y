@@ -1,0 +1,11 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "expressjs-test"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1voat6m8oopjj"
+s3_prefix = "expressjs-test"
+region = "ap-northeast-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = ["ExpressFunction=544592066775.dkr.ecr.ap-northeast-1.amazonaws.com/expressjsteste4444ca8/expressfunction9fcbc1barepo"]

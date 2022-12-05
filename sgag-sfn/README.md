@@ -11,6 +11,7 @@
 aws lambda publish-layer-version --layer-name saga --zip-file fileb://layer.zip --compatible-runtimes nodejs16.x --region ap-northeast-1
 ```
 上传即可
+
 3. 执行 serverless deploy 部署相关Lambda,可以修改serverless.yaml修改具体配置
 4. 修改asl相关Lambda配置
 5. 测试

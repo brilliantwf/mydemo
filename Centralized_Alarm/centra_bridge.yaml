@@ -1,0 +1,159 @@
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: SNS-Message
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Amazon SNS parameters
+      Parameters:
+      - Email Address
+Parameters:
+  EmailAddress:
+    Type: String
+    AllowedPattern: "^[\\x20-\\x45]?[\\w-\\+]+(\\.[\\w]+)*@[\\w-]+(\\.[\\w]+)*(\\.[a-z]{2,})$"
+    ConstraintDescription: Email address required.
+    Description: Enter an email address you want to subscribe to the Amazon SNS topic
+      that will send notifications if  Anomalies occur.
+Resources:
+  ActivitySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: SNS-Message
+      Subscription:
+      - Endpoint:
+          Ref: EmailAddress
+        Protocol: email
+      TopicName: SNS-Message
+  LoginEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events rule for monitoring root AWS Console Sign In activity
+      EventPattern:
+        source: ['aws.signin']
+        detail-type:
+        - AWS Console Sign In via CloudTrail
+      Name:
+        Fn::Sub: "${AWS::StackName}-LoginActivityRule"
+      State: ENABLED
+      Targets:
+      - Arn:
+          Ref: ActivitySNSTopic
+        Id: ActivitySNSTopic
+        InputTransformer:
+          InputPathsMap:
+                "account-id": "$.account"
+                "region": "$.region"
+                "Username": "$.detail.userIdentity.sessionContext.sessionIssuer.userName"
+                "LoginIP": "$.detail.sourceIPAddress"
+                "Event": "$.detail.eventName"
+                "time": "$.time"
+          InputTemplate: |
+              "控制台登录告警: 账号: <account-id> 区域: <region> 用户名:<Username> 登录IP: <LoginIP> 事件: <Event> 时间: <time>"
+    DependsOn:
+    - ActivitySNSTopic
+  EC2EventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events rule for monitoring EC2 activity
+      EventPattern:
+        source: ['aws.ec2']
+        detail-type: ["EC2 Instance State-change Notification"]
+        detail:
+          state: ["shutting-down", "terminated"]
+      Name:
+        Fn::Sub: "${AWS::StackName}-EC2ActivityRule"
+      State: ENABLED
+      Targets:
+      - Arn:
+          Ref: ActivitySNSTopic
+        Id: ActivitySNSTopic
+        InputTransformer:
+          InputPathsMap:
+                "account-id": "$.account"
+                "instance-id": "$.detail.instance-id"
+                "region": "$.region"
+                "state": "$.detail.state"
+                "time": "$.time"
+          InputTemplate: |
+              "EC2状态变化告警: 账号: <account-id> 区域: <region> Instance_id:<instance-id> 状态: <state> 时间: <time>"
+    DependsOn:
+    - ActivitySNSTopic
+  IAMEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events rule for monitoring IAM activity
+      EventPattern:
+        source: ['aws.iam']
+        detail-type: ["AWS API Call via CloudTrail"]
+        detail:
+          eventSource: ["iam.amazonaws.com"]
+          eventName: ["CreateUser", "CreateRole", "CreatePolicy", "CreatePolicyVersion", "AddUserToGroup", "AttachGroupPolicy", "AttachRolePolicy", "AttachUserPolicy", "PutGroupPolicy", "PutRolePolicy", "PutUserPolicy"]
+      Name:
+        Fn::Sub: "${AWS::StackName}-IAMActivityRule"
+      State: ENABLED
+      Targets:
+      - Arn:
+          Ref: ActivitySNSTopic
+        Id: ActivitySNSTopic
+        InputTransformer:
+          InputPathsMap:
+                "account-id": "$.account"
+                "region": "$.region"
+                "Username": "$.detail.userIdentity.sessionContext.sessionIssuer.userName"
+                "LoginIP": "$.detail.sourceIPAddress"
+                "Event": "$.detail.eventName"
+                "time": "$.time"
+          InputTemplate: |
+              "IAM变更告警: 账号: <account-id> 区域: <region> 用户名:<Username> 登录IP: <LoginIP> 事件: <Event> 时间: <time>"
+  GuarddutyEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events rule for monitoring GuardDuty activity
+      EventPattern:
+        source: ['aws.guardduty']
+        detail-type: ["GuardDuty Finding"]
+        detail:
+          severity: [4, 4.0, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5, 5.0, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 6, 6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9]
+      Name:
+        Fn::Sub: "${AWS::StackName}-GuarddutyActivityRule"
+      State: ENABLED
+      Targets:
+      - Arn:
+          Ref: ActivitySNSTopic
+        Id: ActivitySNSTopic
+        InputTransformer:
+          InputPathsMap:
+                "account-id": "$.account"
+                "region": "$.region"
+                "severity": "$.detail.severity"
+                "EventTitle": "$.detail.title"
+                "time": "$.time"
+          InputTemplate: |
+              "Guardduty告警: 账号: <account-id> 区域: <region> 事件级别:<severity> 事件名称: <EventTitle> 时间: <time>"
+    DependsOn:
+    - ActivitySNSTopic  
+  RootPolicyDocument:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: RootPolicyDocument
+        Version: '2012-10-17'
+        Statement:
+        - Sid: RootPolicyDocument
+          Effect: Allow
+          Principal:
+            Service: events.amazonaws.com
+          Action: sns:Publish
+          Resource:
+          - Ref: ActivitySNSTopic
+      Topics:
+      - Ref: ActivitySNSTopic
+Outputs:
+  LoginEventsRule:
+    Value:
+      Ref: LoginEventsRule
+    Export:
+      Name:
+        Fn::Sub: "${AWS::StackName}-RootMonitorEventsRule"
+    Description: Event Rule ID.

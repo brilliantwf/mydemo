@@ -1,6 +1,6 @@
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: SNS-Message
+Description: AWS-SNS-Message
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:

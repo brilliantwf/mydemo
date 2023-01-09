@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Route to centralized eventbridge
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Amazon Eventbridge parameters
+      Parameters:
+      - Centra Account Eventbridge ARN
+Parameters:
+  EventbridgeARN:
+    Type: String
+    ConstraintDescription: Eventbridge parameters required.
+    Description: Enter Centra Eventbridge ARN.
+Resources:
+  AllEC2EventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: Routes centralized event bus
+      EventBusName: default
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.ec2
+      Targets:
+        - Arn: 
+            Ref: EventbridgeARN
+          Id: events-central-account
+          RoleArn: !GetAtt 
+            - EventBridgeIAMrole
+            - Arn
+  GuardDutyEventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: Routes centralized event bus
+      EventBusName: default
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail-type:
+          - GuardDuty Finding
+      Targets:
+        - Arn: 
+            Ref: EventbridgeARN
+          Id: events-central-account
+          RoleArn: !GetAtt 
+            - EventBridgeIAMrole
+            - Arn
+  IAMEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events rule for monitoring IAM activity
+      EventPattern:
+        source: ['aws.iam']
+        detail-type: ["AWS API Call via CloudTrail"]
+        detail:
+          eventSource: ["iam.amazonaws.com"]
+          eventName: ["CreateUser", "CreateRole", "CreatePolicy", "CreatePolicyVersion", "AddUserToGroup", "AttachGroupPolicy", "AttachRolePolicy", "AttachUserPolicy", "PutGroupPolicy", "PutRolePolicy", "PutUserPolicy"]
+      Name:
+        Fn::Sub: "${AWS::StackName}-IAMActivityRule"
+      State: ENABLED
+      Targets:
+        - Arn: 
+            Ref: EventbridgeARN
+          Id: events-central-account
+          RoleArn: !GetAtt 
+            - EventBridgeIAMrole
+            - Arn
+  LoginEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Events rule for monitoring root AWS Console Sign In activity
+      EventPattern:
+        source: ['aws.signin']
+        detail-type:
+        - AWS Console Sign In via CloudTrail
+      Name:
+        Fn::Sub: "${AWS::StackName}-LoginActivityRule"
+      State: ENABLED
+      Targets:
+        - Arn: 
+            Ref: EventbridgeARN
+          Id: events-central-account
+          RoleArn: !GetAtt 
+            - EventBridgeIAMrole
+            - Arn
+  EventBridgeIAMrole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !Sub events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: PutEventsDestinationBus
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'events:PutEvents'
+                Resource:
+                  - Ref: EventbridgeARN

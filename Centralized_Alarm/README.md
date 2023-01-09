@@ -15,5 +15,5 @@ Cloudformation 推荐部署在US-EAST-1 Region.
 1. IAM 状态监控需要部署在UE1 Region
 
 
-多账号需要配合Branch Stacksets(待完成)
+多账号需要配合Branch Stacksets:Branch_EB 参考installguide
 

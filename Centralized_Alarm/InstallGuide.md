@@ -48,7 +48,7 @@ https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/s
 ## 3. 验证
 部署完中心和分支Eventbridge后,如果中心或者分支账号已部署上述堆栈的区域出现了以下事件,会触发邮件告警,包括:
 1. 账号控制台登录
-![Pasted image 20230109184856.png](https://github.com/brilliantwf/mydemo/blob/main/Centralized_Alarm/img/Pasted%20image%2020230109184856.png)
+![Pasted image 20230109191746.png](https://github.com/brilliantwf/mydemo/blob/main/Centralized_Alarm/img/Pasted%20image%2020230109191746.png)
 3. IAM 出现了异常行为包括("CreateUser", "CreateRole", "CreatePolicy", "CreatePolicyVersion", "AddUserToGroup", "AttachGroupPolicy", "AttachRolePolicy", "AttachUserPolicy", "PutGroupPolicy", "PutRolePolicy", "PutUserPolicy")
 ![Pasted image 20230109184754.png](https://github.com/brilliantwf/mydemo/blob/main/Centralized_Alarm/img/Pasted%20image%2020230109184754.png)
 5. EC2 的状态出现了变更(停止,终止)

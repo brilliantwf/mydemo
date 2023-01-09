@@ -1,4 +1,4 @@
-集中告警 通过EventBridge和SNS
+## 集中告警 通过EventBridge和SNS
 
 Cloudformation 推荐部署在US-EAST-1 Region.
 

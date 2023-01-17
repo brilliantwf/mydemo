@@ -1,5 +1,7 @@
 ## 1. 创建中心Eventbridge
 
+**前置条件:账号需要先启用Cloudtrail 和 Guardduty**
+
 1. 编辑默认事件总线访问权限
 ![Pasted image 20230108194450.png](https://github.com/brilliantwf/mydemo/blob/main/Centralized_Alarm/img/Pasted%20image%2020230108194450.png)
 2. 在基于资源的策略中贴入如下策略,并保存

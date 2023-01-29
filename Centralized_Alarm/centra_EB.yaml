@@ -16,6 +16,10 @@ Parameters:
     Description: Enter an email address you want to subscribe to the Amazon SNS topic
       that will send notifications if  Anomalies occur.
 Resources:
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties: 
+      Enable: True
   ActivitySNSTopic:
     Type: AWS::SNS::Topic
     Properties:

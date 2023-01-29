@@ -13,6 +13,10 @@ Parameters:
     ConstraintDescription: Eventbridge parameters required.
     Description: Enter Centra Eventbridge ARN.
 Resources:
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties: 
+      Enable: True
   AllEC2EventRule:
     Type: 'AWS::Events::Rule'
     Properties:

@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template deploy envoy proxy for Elasticache on EC2 instance
+Parameters:
+  EnvoyInstanceType:
+    Type: String
+    Default: c5.large
+    AllowedValues:
+      - c5.2xlarge
+      - c5.xlarge
+      - c5.large
+  EnvoyProxyClusterName:
+    Type: String
+    Description: Specific envoy Proxy Name
+  RedisClusterConfigurationEndPoint:
+    Type: String
+    Description: Specific corresponding Redis Cluster Configuration Endpoint
+  EnvoyProxyVPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Choose one valid VPC for envoy Proxy
+  EnvoyProxySubnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for envoy Proxy
+  EnvoyProxyKey:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Select the key pair for those EC2 instance
+  EnvoyProxySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Description: Choose Security Group for this cloudformation
+Mappings:
+  RegionMap:
+    us-east-1:
+      "AMI": "ami-0aa7d40eeae50c9a9"
+    us-west-2:
+      "AMI": "ami-06e85d4c3149db26a"
+    ap-southeast-1:
+      "AMI": "ami-0753e0e42b20e96e3"
+Resources:
+  #Create SSM role
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles: 
+        - !Ref SSMInstanceRole
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      InstanceType: !Ref EnvoyInstanceType
+      SubnetId: !Select [0, !Ref EnvoyProxySubnets]
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      KeyName: !Ref EnvoyProxyKey
+      SecurityGroupIds: 
+        - !Ref EnvoyProxySecurityGroup
+      Tags:
+       - Key: Name
+         Value: !Sub "${AWS::StackName}-EC2"      
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash
+              rpm --import 'https://rpm.dl.getenvoy.io/public/gpg.CF716AF503183491.key'
+              curl -sL 'https://rpm.dl.getenvoy.io/public/config.rpm.txt?distro=el&codename=7' > /tmp/tetrate-getenvoy-rpm-stable.repo
+              yum-config-manager --add-repo '/tmp/tetrate-getenvoy-rpm-stable.repo' -y
+              yum makecache --disablerepo='*' --enablerepo='tetrate-getenvoy-rpm-stable' -y
+              yum install getenvoy-envoy -y
+              wget https://wh-tempdata.s3.amazonaws.com/enovy/envoy.yaml -P /opt/getenvoy/
+              sed -i 's/REDIS-ENDPOINT/${RedisClusterConfigurationEndPoint}/g' /opt/getenvoy/envoy.yaml
+              envoy -c /opt/getenvoy/envoy.yaml --service-cluster proxy &
+
+Outputs:
+  EnvoyIp:
+    Description: Envoy Instance Public Ip
+    Value: !GetAtt EC2Instance.PublicIp

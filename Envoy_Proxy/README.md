@@ -15,7 +15,7 @@ https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/s
 3. 支持流量镜像,需要手动改envoy.yaml
 
 **注意:**
-请先选择VPC 后再选择子网
+仅做快速测试用,生产环境需要调整
 
 Ref:
 

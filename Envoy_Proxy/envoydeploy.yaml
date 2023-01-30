@@ -1,5 +1,19 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: This template deploy envoy proxy for Elasticache on EC2 instance
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "Envoy Instance Config"
+        Parameters:
+          - RedisClusterConfigurationEndPoint
+          - EnvoyProxyClusterName
+          - EnvoyInstanceType
+          - EnvoyProxyVPC
+          - EnvoyProxySubnets
+          - EnvoyProxySecurityGroup
+          - EnvoyProxyKey
 Parameters:
   EnvoyInstanceType:
     Type: String
@@ -83,6 +97,6 @@ Resources:
               envoy -c /opt/getenvoy/envoy.yaml --service-cluster proxy &
 
 Outputs:
-  EnvoyIp:
-    Description: Envoy Instance Public Ip
-    Value: !GetAtt EC2Instance.PublicIp
+  EnvoyPrivteIp:
+    Description: Envoy Instance Privte Ip
+    Value: !GetAtt EC2Instance.PrivateIp

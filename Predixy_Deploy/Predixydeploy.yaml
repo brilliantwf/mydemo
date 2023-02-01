@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template deploy Predixy proxy for Elasticache on EC2 instance
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "Predixy Instance Config"
+        Parameters:
+          - RedisClusterConfigurationEndPoint
+          - PredixyProxyClusterName
+          - PredixyInstanceType
+          - PredixyProxyVPC
+          - PredixyProxySubnets
+          - PredixyProxySecurityGroup
+          - PredixyProxyKey
+Parameters:
+  PredixyInstanceType:
+    Type: String
+    Default: c6in.large
+    AllowedValues:
+      - c6in.2xlarge
+      - c6in.xlarge
+      - c6in.large
+  PredixyProxyClusterName:
+    Type: String
+    Description: Specific Predixy Proxy Name
+  RedisClusterConfigurationEndPoint:
+    Type: String
+    Description: Specific corresponding Redis Cluster Configuration Endpoint with port
+  PredixyProxyVPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Choose one valid VPC for Predixy Proxy
+  PredixyProxySubnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for Predixy Proxy
+  PredixyProxyKey:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Select the key pair for those EC2 instance
+  PredixyProxySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Description: Choose Security Group for this cloudformation
+Mappings:
+  RegionMap:
+    us-east-1:
+      "AMI": "ami-0aa7d40eeae50c9a9"
+    us-west-2:
+      "AMI": "ami-06e85d4c3149db26a"
+    ap-southeast-1:
+      "AMI": "ami-0753e0e42b20e96e3"
+Resources:
+  #Create SSM role
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles: 
+        - !Ref SSMInstanceRole
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      InstanceType: !Ref PredixyInstanceType
+      SubnetId: !Select [0, !Ref PredixyProxySubnets]
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      KeyName: !Ref PredixyProxyKey
+      SecurityGroupIds: 
+        - !Ref PredixyProxySecurityGroup
+      Tags:
+       - Key: Name
+         Value: !Sub "${AWS::StackName}-EC2"      
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash
+              wget https://wh-tempdata.s3.amazonaws.com/Predixy/predixy -P /usr/local/bin/
+              chmod +x /usr/local/bin/predixy
+              wget https://wh-tempdata.s3.amazonaws.com/Predixy/predixy.tar -P /etc/
+              cd /etc/
+              tar -xvf predixy.tar
+              sed -i 's/REDIS-ENDPOINT/${RedisClusterConfigurationEndPoint}/g' /etc/predixy/conf/cluster.conf
+              predixy /etc/predixy/conf/predixy.conf &
+
+Outputs:
+  PredixyPrivteIp:
+    Description: Predixy Instance Privte Ip
+    Value: !GetAtt EC2Instance.PrivateIp

@@ -36,7 +36,7 @@ Resources:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     Properties:
       KeyName: !Ref EC2KeyPair
-      ImageId: !Ref GoldImgID # 创建的EC2基础镜像AMI ID
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI] # 创建的EC2基础镜像AMI ID
       SecurityGroups:
         - !Ref EC2ClusterSecurityGroup
       InstanceType: !Ref ClusterInstanceType
@@ -136,7 +136,7 @@ Parameters:
   ClusterAutoScallingCPUThreshold:
     Type: Number
     Description: Set CPU threshold for Cluster cluster scale up
-    Default: 50
+    Default: 65
   ClusterDefaultInstanceCount:
     Type: Number
     Description: Set initial size of EC2 instances for Cluster
@@ -179,6 +179,14 @@ Parameters:
   PredixyWorkerThreads:
     Type: Number
     Description: Specific Predixy Node WokerThreads
+Mappings:
+  RegionMap:
+    us-east-1:
+      "AMI": "ami-0aa7d40eeae50c9a9"
+    us-west-2:
+      "AMI": "ami-06e85d4c3149db26a"
+    ap-southeast-1:
+      "AMI": "ami-0753e0e42b20e96e3" 
 Outputs:
   EC2ClusterNLBDNSName:
     Description: The DNSName of the Cluster NLB load balancer

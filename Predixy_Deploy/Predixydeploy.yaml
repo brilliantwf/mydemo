@@ -93,6 +93,7 @@ Resources:
               cd /etc/
               tar -xvf predixy.tar
               sed -i 's/REDIS-ENDPOINT/${RedisClusterConfigurationEndPoint}/g' /etc/predixy/conf/cluster.conf
+              sed -i 's/WORKER-THREADS-NUMBER/${PredixyWorkerThreads}/g' /etc/predixy/conf/predixy.conf
               predixy /etc/predixy/conf/predixy.conf &
 
 Outputs:

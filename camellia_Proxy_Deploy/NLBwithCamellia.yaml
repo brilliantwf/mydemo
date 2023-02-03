@@ -18,7 +18,6 @@ Metadata:
           - EC2KeyPair
           - EC2ClusterSecurityGroup
           - RedisClusterConfigurationEndPoint
-          - PredixyWorkerThreads
       - 
         Label: 
           default: "NLB and Autoscaling Config"
@@ -43,14 +42,14 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
             #!/bin/bash
-              wget https://wh-tempdata.s3.amazonaws.com/Predixy/predixy -P /usr/local/bin/
-              chmod +x /usr/local/bin/predixy
-              wget https://wh-tempdata.s3.amazonaws.com/Predixy/predixy.tar -P /etc/
+              amazon-linux-extras enable corretto8
+              yum install java-1.8.0-amazon-corretto-devel -y
+              wget wget https://wh-tempdata.s3.amazonaws.com/camellia/camellia.tar -P /etc/
               cd /etc/
-              tar -xvf predixy.tar
-              sed -i 's/REDIS-ENDPOINT/${RedisClusterConfigurationEndPoint}/g' /etc/predixy/conf/cluster.conf
-              sed -i 's/WORKER-THREADS-NUMBER/${PredixyWorkerThreads}/g' /etc/predixy/conf/predixy.conf
-              predixy /etc/predixy/conf/predixy.conf &
+              tar -xvf camellia.tar
+              sed -i 's/REDIS-ENDPOINT/${RedisClusterConfigurationEndPoint}/g' /etc/camellia-redis/BOOT-INF/classes/application.yml
+              cd /etc/camellia-redis/
+              bash ./start.sh &
 
   EC2ClusterAutoScalingPolicyCPUUtilization:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -88,7 +87,7 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref EC2ClusterTargetGroup
-      Port: 6379
+      Port: 6380
       Protocol: TCP
       LoadBalancerArn: !Ref EC2ClusterNLB
 
@@ -114,11 +113,11 @@ Parameters:
   GoldImgID:
     Type: 'AWS::EC2::Image::Id'
     Description: Gold ImageID
-    Default: ami-06e85d4c3149db26a
+    Default: ami-0df8cc65dcc6600ff
   HealthcheckPort:
     Type: Number
     Description: Target HealthcheckPort
-    Default: 6379
+    Default: 6380
   NLBExposePort:
     Type: Number
     Description: NLB Expose HealthcheckPort
@@ -151,12 +150,12 @@ Parameters:
     Default: 4
   ClusterInstanceType:
     Type: String
-    Default: c6in.large
+    Default: c6gn.2xlarge
     AllowedValues:
-      - c6in.4xlarge
-      - c6in.2xlarge
-      - c6in.xlarge
-      - c6in.large
+      - c6gn.4xlarge
+      - c6gn.2xlarge
+      - c6gn.xlarge
+      - c6gn.large
     Description: Enter EC2 type for cluster.
   EC2ClusterClusterName:
     Type: String
@@ -175,10 +174,7 @@ Parameters:
     Description: Choose Security Group for this cloudformation
   RedisClusterConfigurationEndPoint:
     Type: String
-    Description: Specific corresponding Redis Cluster Configuration Endpoint with port
-  PredixyWorkerThreads:
-    Type: Number
-    Description: Specific Predixy Node WokerThreads
+    Description: Specific corresponding Redis Cluster Configuration Endpoint without port
 Outputs:
   EC2ClusterNLBDNSName:
     Description: The DNSName of the Cluster NLB load balancer

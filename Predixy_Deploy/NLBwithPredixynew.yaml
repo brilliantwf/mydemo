@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "EC2 Instance Config"
+        Parameters:
+          - ClusterInstanceType
+      - 
+        Label: 
+          default: "Cluster Config"
+        Parameters:
+          - EC2ClusterClusterName
+          - EC2ClusterVPC
+          - EC2ClusterSubnets
+          - EC2KeyPair
+          - EC2ClusterSecurityGroup
+          - RedisClusterConfigurationEndPoint
+          - RedisServerConfigurationEndPoint
+          - ProxyWorkThreads
+      - 
+        Label: 
+          default: "NLB and Autoscaling Config"
+        Parameters:
+          - HealthcheckPort
+          - NLBExposePort
+          - NLBSubnets
+          - NLBScheme
+          - ClusterAutoScallingCPUThreshold
+          - ClusterDefaultInstanceCount
+          - MinimalInstanceCount
+          - ClusterMaximumInstanceCount      
+Resources:
+  #Create SSM role
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Roles: 
+        - !Ref SSMInstanceRole
+  EC2ClusterAutoScalingGroupConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      KeyName: !Ref EC2KeyPair
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      SecurityGroups:
+        - !Ref EC2ClusterSecurityGroup
+      InstanceType: !Ref ClusterInstanceType
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+            #!/bin/bash
+              wget https://wh-tempdata.s3.amazonaws.com/Predixy/New/predixy -P /usr/local/bin/
+              chmod +x /usr/local/bin/predixy
+              wget https://wh-tempdata.s3.amazonaws.com/Predixy/New/predixy.tar -P /etc/
+              cd /etc/
+              tar -xvf predixy.tar
+              sed -i 's/REDIS-ENDPOINT/${RedisClusterConfigurationEndPoint}/g' /etc/predixy/conf/predixy.conf
+              sed -i 's/REDIS-SERVER/${RedisServerConfigurationEndPoint}/g' /etc/predixy/conf/predixy.conf
+              sed -i 's/WorkerThreads.*/WorkerThreads ${ProxyWorkThreads}/' /etc/predixy/conf/predixy.conf
+              predixy /etc/predixy/conf/predixy.conf &
+
+  EC2ClusterAutoScalingPolicyCPUUtilization:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref EC2ClusterAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !Ref ClusterAutoScallingCPUThreshold
+
+  EC2ClusterTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      VpcId: !Ref EC2ClusterVPC
+      Protocol: TCP
+      Port: !Ref HealthcheckPort
+
+  EC2ClusterNLB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Ref EC2ClusterClusterName
+      Type: network
+      Scheme: !Ref NLBScheme
+      Subnets: !Split [',', !Join [',', !Ref NLBSubnets]]
+
+  EC2ClusterELBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    DependsOn:
+      - EC2ClusterNLB
+      - EC2ClusterTargetGroup
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref EC2ClusterTargetGroup
+      Port: 6379
+      Protocol: TCP
+      LoadBalancerArn: !Ref EC2ClusterNLB
+
+  EC2ClusterAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    DependsOn:
+      - EC2ClusterAutoScalingGroupConfiguration
+      - EC2ClusterTargetGroup
+    Properties:
+      TargetGroupARNs:
+        - !Ref EC2ClusterTargetGroup
+      VPCZoneIdentifier: !Split [',', !Join [',', !Ref EC2ClusterSubnets]]
+      DesiredCapacity: !Ref ClusterDefaultInstanceCount
+      HealthCheckGracePeriod: 100
+      LaunchConfigurationName: !Ref EC2ClusterAutoScalingGroupConfiguration
+      MinSize: !Ref MinimalInstanceCount
+      MaxSize: !Ref ClusterMaximumInstanceCount
+      Tags:
+        - Key: Name
+          Value: !Ref EC2ClusterClusterName
+          PropagateAtLaunch: true
+Mappings:
+  RegionMap:
+    us-east-1:
+      "AMI": "ami-0aa7d40eeae50c9a9"
+    us-west-2:
+      "AMI": "ami-06e85d4c3149db26a"
+    ap-southeast-1:
+      "AMI": "ami-0753e0e42b20e96e3"
+Parameters:
+  HealthcheckPort:
+    Type: Number
+    Description: Target HealthcheckPort
+    Default: 6379
+  NLBExposePort:
+    Type: Number
+    Description: NLB Expose HealthcheckPort
+    Default: 6379
+  NLBSubnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for NLB
+  NLBScheme:
+    Type: String
+    Default: internet-facing
+    AllowedValues:
+      - internet-facing
+      - internal
+    Description: Internal or internet-facing Network Loadbalance
+  ClusterAutoScallingCPUThreshold:
+    Type: Number
+    Description: Set CPU threshold for Cluster cluster scale up
+    Default: 65
+  ClusterDefaultInstanceCount:
+    Type: Number
+    Description: Set initial size of EC2 instances for Cluster
+    Default: 2
+  MinimalInstanceCount:
+    Type: Number
+    Description: Set minimize size of EC2 instances for Cluster
+    Default: 0
+  ClusterMaximumInstanceCount:
+    Type: Number
+    Description: Set maximum size of EC2 instances for Cluster
+    Default: 4
+  ClusterInstanceType:
+    Type: String
+    Default: c6in.large
+    AllowedValues:
+      - c6in.4xlarge
+      - c6in.2xlarge
+      - c6in.xlarge
+      - c6in.large
+    Description: Enter EC2 type for cluster.
+  EC2ClusterClusterName:
+    Type: String
+    Description: Specific Cluster Name
+    Default: PredixyEC2
+  EC2ClusterVPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Choose one valid VPC for Cluster
+  EC2ClusterSubnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for Cluster
+  EC2KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Select the key pair for those EC2 instance
+  EC2ClusterSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Description: Choose Security Group for this cloudformation
+  RedisClusterConfigurationEndPoint:
+    Type: String
+    Description: Specific corresponding Redis Cluster Configuration Endpoint with port
+  RedisServerConfigurationEndPoint:
+    Type: String
+    Description: Specific corresponding Redis Cluster Configuration Endpoint without port  
+  ProxyWorkThreads:
+    Type: Number
+    Default: 2
+    Description: Specific Proxy worker threads
+Outputs:
+  EC2ClusterNLBDNSName:
+    Description: The DNSName of the Cluster NLB load balancer
+    Value: !GetAtt EC2ClusterNLB.DNSName

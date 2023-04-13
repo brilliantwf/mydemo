@@ -1,0 +1,366 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Windows Server with NICE DCV (login as administrator)
+
+Metadata:
+  License:
+    Description: >
+      Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+      SPDX-License-Identifier: MIT-0
+  AWS::CloudFormation::Interface: 
+    ParameterGroups:
+      -
+        Label:
+          default: AMI and instance type
+        Parameters:
+          - imageId
+          - instanceType
+          - driverType          
+      -
+        Label:
+          default: EC2 configuration
+        Parameters:
+          - ec2Name
+          - vpcID
+          - subnetID
+      -
+        Label:
+          default: Allowed inbound source IP prefixes to NICE DCV port 8443
+        Parameters:
+          - ingressIPv4
+          - ingressIPv6
+      -
+        Label:
+          default: EBS volume configuration
+        Parameters:
+          - volumeSize
+          - volumeType
+          - deviceName
+Mappings:
+  RegionMap:
+    us-east-1:
+      "AMI": "ami-0b7dd7b9e977b2b85"
+    us-west-2:
+      "AMI": "ami-00719b15124c74012"
+    ap-southeast-1:
+      "AMI": "ami-0c7486b2f37da2312"
+Parameters: 
+  instanceType:
+    Type: String
+    Description: Instance type ( https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html )
+    Default: g4dn.large
+    AllowedValues:
+      - g4dn.2xlarge
+      - g4dn.xlarge
+      - g4dn.large
+  driverType:
+    Description: Graphics driver to install
+    Type: String
+    AllowedValues:
+      - AMD
+      - NICE-DCV
+      - NVIDIA-Gaming
+      - NVIDIA-GRID
+    Default: NICE-DCV
+
+  ec2Name:
+    Description: Name of EC2 instance
+    Type: String
+    Default: Windows Server-NICE-DCV
+  vpcID:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC with internet connectivity
+    ConstraintDescription: Do specify a valid value
+    AllowedPattern: ".+"
+  subnetID:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet with internet connectivity
+    ConstraintDescription: Do specify a valid value
+    AllowedPattern: ".+"
+
+  ingressIPv4:
+    Type: String
+    Description: Allowed source prefix (IPv4) ( https://checkip.amazonaws.com )
+    Default: 0.0.0.0/0
+  ingressIPv6:
+    Type: String
+    Description: Allowed source prefix (IPv6)
+    Default: ::/0
+
+  volumeType:
+    Type: String
+    Description: Volume Type ( https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html )
+    AllowedValues:
+      - gp2
+      - gp3
+    Default: gp3
+  volumeSize:
+    Type: Number
+    Description: Volume Size in GiBs (must be equal or larger than snapshot size)
+    Default: 30
+  deviceName:
+    Type: String
+    Description: Device Name
+    Default: /dev/sda1
+
+Resources:
+  securityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound DCV
+      VpcId: !Ref vpcID
+      SecurityGroupIngress:
+        - Description: NICE DCV (IPv4)
+          IpProtocol: "tcp"
+          FromPort: 8443
+          ToPort: 8443
+          CidrIp: !Ref ingressIPv4
+        - Description: NICE DCV QUIC (IPv4)
+          IpProtocol: "udp"
+          FromPort: 8443
+          ToPort: 8443
+          CidrIp: !Ref ingressIPv4
+        - Description: NICE DCV (IPv6)
+          IpProtocol: "tcp"
+          FromPort: 8443
+          ToPort: 8443
+          CidrIpv6: !Ref ingressIPv6
+        - Description: NICE DCV QUIC (IPv6)
+          IpProtocol: "udp"
+          FromPort: 8443
+          ToPort: 8443
+          CidrIpv6: !Ref ingressIPv6
+      SecurityGroupEgress:
+        - Description: Allow all outbound traffic (IPv4)
+          IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+        - Description: Allow all outbound traffic (IPv6)
+          IpProtocol: "-1"
+          CidrIpv6: "::/0"
+      Tags:
+        - Key: StackName
+          Value: !Sub ${AWS::StackName}
+        - Key: StackId
+          Value: !Sub ${AWS::StackId}
+        - Key: Name
+          Value: !Sub "[${AWS::StackName}] - ${ec2Name}"
+        - Key: GitHub
+          Value: https://github.com/aws-samples/amazon-ec2-nice-dcv-samples
+
+  instanceIamRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies: # https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-license.html
+      - PolicyName: dcvLicensing
+        PolicyDocument:
+          Version: '2012-10-17'  
+          Statement:
+          - Effect: Allow
+            Action: 
+              - s3:GetObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::dcv-license.${AWS::Region}/*"
+      - PolicyName: gpuDrivers
+        PolicyDocument: # https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-nvidia-driver.html https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-amd-driver.html
+          Version: '2012-10-17' 
+          Statement:
+          - Effect: Allow
+            Action: 
+              - s3:Get*
+              - s3:List*
+            Resource: 
+              - !Sub "arn:${AWS::Partition}:s3:::nvidia-gaming"
+              - !Sub "arn:${AWS::Partition}:s3:::nvidia-gaming/*"
+              - !Sub "arn:${AWS::Partition}:s3:::ec2-windows-nvidia-drivers"
+              - !Sub "arn:${AWS::Partition}:s3:::ec2-windows-nvidia-drivers/*"
+              - !Sub "arn:${AWS::Partition}:s3:::ec2-amd-windows-drivers"
+              - !Sub "arn:${AWS::Partition}:s3:::ec2-amd-windows-drivers/*"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Tags:
+        - Key: StackName
+          Value: !Sub ${AWS::StackName}
+        - Key: StackId
+          Value: !Sub ${AWS::StackId}
+        - Key: GitHub
+          Value: https://github.com/aws-samples/amazon-ec2-nice-dcv-samples
+
+  instanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      Path: /
+      Roles: 
+      - !Ref instanceIamRole
+
+  ec2Instance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT90M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          setup:
+            - 00_setup    
+        00_setup:
+          files:
+            c:\\Users\\Administrator\\update-DCV.cmd:
+              content: |
+                @echo off
+                cd \windows\temp
+                del \windows\temp\nice-dcv-*.msi
+                del \windows\temp\dcv_install_msi.log
+                "C:\Program Files\NICE\DCV\Server\bin\dcv" close-session console
+                net stop dcvserver
+                powershell -command "(New-Object System.Net.WebClient).DownloadFile('https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-server-x64-Release.msi', 'nice-dcv-server-x64-Release.msi')"
+                msiexec.exe  /i nice-dcv-server-x64-Release.msi ADDLOCAL=ALL /quiet /norestart /l*v dcv_install_msi.log
+                reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\session-management\automatic-console-session /v owner /t REG_SZ /d "administrator" /f
+                reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\session-management /v create-session /t REG_DWORD /d 1 /f
+                reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\session-management\automatic-console-session /v storage-root /t REG_SZ /d C:/Users/Administrator/ /f
+                reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\connectivity /v enable-quic-frontend /t REG_DWORD /d 1 /f
+                net start dcvserver
+            c:\\Users\\Administrator\\update-awscli.cmd:
+              content: |
+                @echo off
+                C:\ProgramData\chocolatey\bin\cup -y awscli
+            c:\\Users\\Administrator\\download-gpu-drivers.cmd:
+              content: |
+                @echo off
+                cls
+                @echo.
+                @echo NOTICE: These downloads are available to AWS customers only.
+                @echo.
+                @echo By downloading, you agree to conditions and are bound by license terms as stated on
+                @echo   https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-amd-driver.html and
+                @echo   https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-nvidia-driver.html
+                @echo.
+                pause
+                @echo Downloading drivers...
+                if not exist "C:\Users\Administrator\Downloads\Drivers" md "C:\Users\Administrator\Downloads\Drivers"
+                cd C:\Users\Administrator\Downloads\Drivers
+                cd
+                "C:\Program Files\Amazon\AWSCLIV2\aws" s3 cp --recursive s3://ec2-windows-nvidia-drivers/latest/ .
+                reg add "HKLM\SOFTWARE\NVIDIA Corporation\Global\GridLicensing" /v NvCplDisableManageLicensePage /t REG_DWORD /d 1 /f
+                "C:\Program Files\Amazon\AWSCLIV2\aws" s3 cp --recursive s3://nvidia-gaming/windows/latest/ .
+                reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global" /v vGamingMarketplace /t REG_DWORD /d 2 /f
+                powershell -command "(New-Object System.Net.WebClient).DownloadFile('https://nvidia-gaming.s3.amazonaws.com/GridSwCert-Archive/GridSwCertWindows_2021_10_2.cert', 'C:\Users\Public\Documents\GridSwCert.txt')"
+                "C:\Program Files\Amazon\AWSCLIV2\aws" s3 cp --recursive s3://ec2-amd-windows-drivers/latest/ .
+                cd
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      InstanceType: !Ref instanceType
+      IamInstanceProfile: !Ref instanceProfile
+      SubnetId: !Ref subnetID
+      Monitoring: true
+      SecurityGroupIds:
+        - !Ref securityGroup
+      BlockDeviceMappings:
+        - DeviceName: !Ref deviceName
+          Ebs:
+            VolumeType: !Ref volumeType
+            VolumeSize: !Ref volumeSize
+            DeleteOnTermination:  true
+      UserData:
+        Fn::Base64:
+          !Sub |
+            <script>
+            @echo off
+            cfn-init.exe -v --stack ${AWS::StackId} --resource ec2Instance --region ${AWS::Region} --configsets setup
+
+            cd \windows\temp\
+            
+            @echo ** https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-install-win.html
+            powershell -command "(New-Object System.Net.WebClient).DownloadFile('https://amazon-ssm-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/windows_amd64/AmazonSSMAgentSetup.exe', 'AmazonSSMAgentSetup.exe')"
+            c:\windows\temp\AmazonSSMAgentSetup.exe /S
+
+            @echo ** https://docs.chocolatey.org/en-us/choco/setup
+            @"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "[System.Net.ServicePointManager]::SecurityProtocol = 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
+
+            @echo ** https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-wininstall.html
+            powershell -command "(New-Object System.Net.WebClient).DownloadFile('https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-server-x64-Release.msi', 'nice-dcv-server-x64-Release.msi')"
+            msiexec.exe  /i nice-dcv-server-x64-Release.msi ADDLOCAL=ALL /quiet /norestart /l*v dcv_install_msi.log
+
+            @echo ** https://docs.aws.amazon.com/dcv/latest/adminguide/managing-sessions-start.html#managing-sessions-start-auto
+            reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\session-management\automatic-console-session /v owner /t REG_SZ /d "administrator" /f 
+            reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\session-management /v create-session /t REG_DWORD /d 1 /f
+
+            @echo ** https://docs.aws.amazon.com/dcv/latest/adminguide/manage-storage.html
+            reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\session-management\automatic-console-session /v storage-root /t REG_SZ /d C:/Users/Administrator/ /f 
+
+            @echo ** https://docs.aws.amazon.com/dcv/latest/adminguide/enable-quic.html
+            reg add HKEY_USERS\S-1-5-18\Software\GSettings\com\nicesoftware\dcv\connectivity /v enable-quic-frontend /t REG_DWORD /d 1 /f
+
+            @echo ** install AWSCLI
+            cinst --no-progress -y awscli
+            setx /M AWS_CLI_AUTO_PROMPT on-partial
+
+            @echo ** install 7-Zip
+            cinst --no-progress -y 7zip.install
+
+            @echo ** install graphics driver
+            SET DRIVER_TYPE=${driverType}
+            SET "PATH=%PATH%;C:\Program Files\7-zip"
+            cd \windows\temp
+            md driver
+            cd driver
+            IF %DRIVER_TYPE% EQU NICE-DCV (
+                @echo ** https://docs.aws.amazon.com/dcv/latest/adminguide/setting-up-installing-winprereq.html#setting-up-installing-general
+                powershell -command "(New-Object System.Net.WebClient).DownloadFile('https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-virtual-display-x64-Release.msi', 'nice-dcv-virtual-display-x64-Release.msi')"
+                msiexec.exe /i nice-dcv-virtual-display-x64-Release.msi /quiet /l dcv-display.log
+            )            
+            IF %DRIVER_TYPE% EQU NVIDIA-GRID (
+                @echo ** https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-nvidia-driver.html#nvidia-installation-options
+                "C:\Program Files\Amazon\AWSCLIV2\aws" s3 cp --recursive s3://ec2-windows-nvidia-drivers/latest/ .
+                reg add "HKLM\SOFTWARE\NVIDIA Corporation\Global\GridLicensing" /v NvCplDisableManageLicensePage /t REG_DWORD /d 1 /f
+                forfiles /M *.exe /C "cmd /c 7z x @file"
+                start /wait setup.exe -s
+            )
+            IF %DRIVER_TYPE% EQU NVIDIA-Gaming (
+                @echo ** https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-nvidia-driver.html#nvidia-installation-options
+                "C:\Program Files\Amazon\AWSCLIV2\aws" s3 cp --recursive s3://nvidia-gaming/windows/latest/ .
+                reg add "HKLM\SYSTEM\CurrentControlSet\Services\nvlddmkm\Global" /v vGamingMarketplace /t REG_DWORD /d 2 /f
+                powershell -command "(New-Object System.Net.WebClient).DownloadFile('https://nvidia-gaming.s3.amazonaws.com/GridSwCert-Archive/GridSwCertWindows_2021_10_2.cert', 'C:\Users\Public\Documents\GridSwCert.txt')"
+                forfiles /M *.exe /C "cmd /c 7z x @file"
+                start /wait setup.exe -s
+            )
+            IF %DRIVER_TYPE% EQU AMD (
+                @echo ** https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/install-amd-driver.html#download-amd-driver
+                "C:\Program Files\Amazon\AWSCLIV2\aws" s3 cp --recursive s3://ec2-amd-windows-drivers/latest/ .
+                forfiles /M *.zip /C "cmd /c 7z x @file"
+                cd Packages\Drivers\Display\*INF
+                pnputil /add-driver *.inf /install
+            )
+
+            @echo ** Restarting DCV 
+            net stop dcvserver
+            net start dcvserver
+
+            cfn-signal.exe -e %errorlevel% --stack ${AWS::StackId} --resource ec2Instance --region ${AWS::Region}
+            </script>
+      Tags:
+        - Key: Name
+          Value: !Ref ec2Name
+        - Key: StackName
+          Value: !Sub ${AWS::StackName}
+        - Key: StackId
+          Value: !Sub ${AWS::StackId}
+        - Key: GitHub
+          Value: https://github.com/aws-samples/amazon-ec2-nice-dcv-samples
+
+Outputs:
+  EC2Instance:
+    Description: EC2 instance console
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/ec2/home?region=${AWS::Region}#Instances:search=${ec2Instance}"
+
+  SSMsessionManager:
+    Description: SSM Session Manager login ("net user administrator <MyStr@ngAdminPassw0rd>" to change administrator password)
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${ec2Instance}"
+
+  DCVwebConsole:
+    Description: DCV web console (login as administrator)
+    Value: !Sub "https://${ec2Instance.PublicIp}:8443"

@@ -47,11 +47,12 @@ Parameters:
   instanceType:
     Type: String
     Description: Instance type ( https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html )
-    Default: g4dn.large
+    Default: c6i.2xlarge
     AllowedValues:
-      - g4dn.2xlarge
-      - g4dn.xlarge
+      - c6i.xlarge
+      - c6i.2xlarge
       - g4dn.large
+      - g4dn.xlarge
   driverType:
     Description: Graphics driver to install
     Type: String

@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  MyVPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Choose one valid VPC for EFS
+  MySubnet:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for EFS
+  MySecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Description: Choose Security Group for EFS
+Resources:
+  MyEFS:
+    Type: AWS::EFS::FileSystem
+    Properties: 
+      PerformanceMode: generalPurpose
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: my-efs
+  MyEFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFS
+      SubnetId: !Select [0,!Ref MySubnet]
+      SecurityGroups: 
+        - !Ref MySecurityGroup
+  MyEFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref MyEFS
+      SubnetId: !Select [1,!Ref MySubnet]
+      SecurityGroups: 
+        - !Ref MySecurityGroup
+Outputs:
+  MyEFSDNSName:
+    Value: !Sub '${MyEFS}.efs.${AWS::Region}.amazonaws.com'

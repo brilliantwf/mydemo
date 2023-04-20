@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: 2010-09-09
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - 
+        Label: 
+          default: "EC2 Instance Config"
+        Parameters:
+          - GoldImgID
+          - ClusterInstanceType
+      - 
+        Label: 
+          default: "Cluster Config"
+        Parameters:
+          - EC2ClusterVPC
+          - EC2ClusterSubnets
+          - EC2KeyPair
+          - EC2ClusterSecurityGroup
+      - 
+        Label: 
+          default: "NLB and Autoscaling Config"
+        Parameters:
+          - HealthcheckPort
+          - NLBExposePort
+          - NLBSubnets
+          - NLBScheme 
+      - 
+        Label: 
+          default: "EFS Config"
+        Parameters:
+          - EFSDNSName
+Resources:
+  EC2ClusterAutoScalingGroupConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      AssociatePublicIpAddress: false
+      KeyName: !Ref EC2KeyPair
+      ImageId: !Ref GoldImgID # 创建的EC2基础镜像AMI ID
+      SecurityGroups:
+        - !Ref EC2ClusterSecurityGroup
+      InstanceType: !Ref ClusterInstanceType
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install httpd -y
+          systemctl start httpd
+          systemctl enable httpd
+          mkdir /mnt/efs
+          echo "${EFSDNSName}:/ /mnt/efs nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev 0 0" >> /etc/fstab
+          mount -a
+          echo "<VirtualHost *:80>
+              DocumentRoot /mnt/efs/html
+              <Directory /mnt/efs/html>
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+          </VirtualHost>" > /etc/httpd/conf.d/custom.conf
+          systemctl restart httpd
+
+  EC2ClusterTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: 10
+      VpcId: !Ref EC2ClusterVPC
+      Protocol: TCP
+      Port: !Ref HealthcheckPort
+
+  EC2ClusterNLB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Sub "${AWS::StackName}-NLB"
+      Type: network
+      Scheme: !Ref NLBScheme
+      Subnets: !Split [',', !Join [',', !Ref NLBSubnets]]
+
+  EC2ClusterELBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    DependsOn:
+      - EC2ClusterNLB
+      - EC2ClusterTargetGroup
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref EC2ClusterTargetGroup
+      Port: !Ref NLBExposePort
+      Protocol: TCP
+      LoadBalancerArn: !Ref EC2ClusterNLB
+
+  EC2ClusterAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    DependsOn:
+      - EC2ClusterAutoScalingGroupConfiguration
+      - EC2ClusterTargetGroup
+    Properties:
+      TargetGroupARNs:
+        - !Ref EC2ClusterTargetGroup
+      VPCZoneIdentifier: !Split [',', !Join [',', !Ref EC2ClusterSubnets]]
+      DesiredCapacity: 1
+      HealthCheckGracePeriod: 100
+      LaunchConfigurationName: !Ref EC2ClusterAutoScalingGroupConfiguration
+      MinSize: 1
+      MaxSize: 1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-EC2"
+          PropagateAtLaunch: true
+Parameters:
+  GoldImgID:
+    Type: 'AWS::EC2::Image::Id'
+    Description: Gold ImageID
+  HealthcheckPort:
+    Type: Number
+    Description: Target HealthcheckPort
+    Default: 80
+  NLBExposePort:
+    Type: Number
+    Description: NLB Expose HealthcheckPort
+    Default: 80
+  NLBSubnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for NLB
+  NLBScheme:
+    Type: String
+    Default: internet-facing
+    AllowedValues:
+      - internet-facing
+      - internal
+    Description: Internal or internet-facing Network Loadbalance
+  ClusterInstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - c6i.4xlarge
+      - c6i.2xlarge
+      - c6i.xlarge
+      - c6i.large
+      - t3.micro
+    Description: Enter EC2 type for cluster.
+  EC2ClusterVPC:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Choose one valid VPC for Cluster
+  EC2ClusterSubnets:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: Choose one or more valid subnet for Cluster
+  EC2KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Select the key pair for those EC2 instance
+  EC2ClusterSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup::Id'
+    Description: Choose Security Group for this cloudformation
+  EFSDNSName:
+    Type: String
+    Description: EFS DNS Name
+Outputs:
+  EC2ClusterNLBDNSName:
+    Description: The DNSName of the Cluster NLB load balancer
+    Value: !GetAtt EC2ClusterNLB.DNSName

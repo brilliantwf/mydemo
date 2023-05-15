@@ -10,6 +10,6 @@
                 "ec2:DeleteNetworkAclEntry"
             ],
             "Resource": [
-                "arn:aws:ec2:us-west-2:544592066775:network-acl/*"
+                "arn:aws:ec2:us-west-2:AccountID:network-acl/*"
             ]
         }

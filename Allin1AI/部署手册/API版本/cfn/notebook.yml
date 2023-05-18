@@ -1,0 +1,87 @@
+
+Description: "Create basic notebook instance"
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Required SageMaker Parameters
+        Parameters:
+          - NotebookInstanceName
+          - NotebookInstanceType
+          - SageMakerRoleArn
+Parameters:
+  NotebookInstanceName:
+    AllowedPattern: '[A-Za-z0-9-]{1,63}'
+    ConstraintDescription: Maximum of 63 alphanumeric characters. Can include hyphens
+      (-), but not spaces. Must be unique within your account in an AWS Region.
+    Description: SageMaker Notebook instance name
+    MaxLength: '63'
+    MinLength: '1'
+    Type: String
+  NotebookInstanceType:
+    AllowedValues:
+      - ml.m5.xlarge
+      - ml.m5.2xlarge
+    ConstraintDescription: Must select a valid notebook instance type.
+    Default: ml.t2.medium
+    Description: Select Instance type for the SageMaker Notebook
+    Type: String
+  SageMakerRoleArn:
+    Description: ARN of the SageMaker IAM execution role. If you don't specify a role, a new role is created with AmazonSageMakerFullAccess managed policy and access is provided to SageMakerS3Bucket, if provided.
+    Type: String
+    Default: ''
+Resources:
+  SageMakerExecutionRole:
+    Condition: RoleArnEmpty
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "sagemaker.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+      Path: "/service-role/"
+      Policies:
+        Fn::If:
+        - S3BucketNotEmpty
+        -
+          - PolicyName: SageMakerS3BucketAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:*
+                  Resource:
+                    - !Sub 'arn:aws:s3:::${SageMakerS3Bucket}'
+                    - !Sub 'arn:aws:s3:::${SageMakerS3Bucket}/*'
+        - Ref: AWS::NoValue
+  BasicNotebookInstance:
+    Type: "AWS::SageMaker::NotebookInstance"
+    Properties:
+      InstanceType: "ml.t2.large"
+      RoleArn: !GetAtt ExecutionRole.Arn
+  ExecutionRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Service: 
+                - "sagemaker.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSageMakerFullAccess"
+Outputs:
+  BasicNotebookInstanceId:
+    Value: !Ref BasicNotebookInstance

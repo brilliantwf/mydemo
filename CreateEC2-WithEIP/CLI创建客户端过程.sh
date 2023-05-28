@@ -13,3 +13,14 @@ aws iam add-role-to-instance-profile --role-name myInstanceRole --instance-profi
 ## 批量创建EC2
 修改create-ec2-witheip.sh  中的实例数量和区域
 执行 sh ./create-ec2-witheip.sh  
+
+成功创建后输出如下:
+
+```
+EC2 实例 1 ID: i-034fdb02520b6520a
+弹性 IP 地址 1: 52.40.231.50
+---
+EC2 实例 2 ID: i-076ee35d6e22a77ff
+弹性 IP 地址 2: 35.155.96.87
+---
+```

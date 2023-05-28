@@ -1,0 +1,34 @@
+{
+  "ImageId": "ami-085aadb9099d3670f",
+  "InstanceType": "t3.large",
+  "MinCount": 1,
+  "MaxCount": 1,
+  "KeyName": "UW2",
+  "SecurityGroupIds": ["sg-0d4c32e795ff95ea1"],
+  "BlockDeviceMappings": [
+    {
+        "DeviceName": "/dev/xvda",
+        "Ebs": {
+            "VolumeSize": 15,
+            "DeleteOnTermination": true,
+            "VolumeType": "gp3",
+            "Encrypted": false
+        }
+    }
+],
+  "TagSpecifications": [
+      {
+          "ResourceType": "instance",
+          "Tags": [
+              {
+                  "Key": "Name",
+                  "Value": "EC2client"
+              }
+          ]
+      }
+  ],
+  "SubnetId": "subnet-03460e0e4a380ba5d",
+  "IamInstanceProfile": {
+    "Arn": "arn:aws:iam::544592066775:instance-profile/myInstanceProfile"
+    }
+}

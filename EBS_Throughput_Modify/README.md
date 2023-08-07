@@ -13,4 +13,4 @@ EC2 booting(running) --> Eventbridge rule  --> Stepfunction (with Timer) --> Lam
 1. TimerDuration 等待的时间
 2. ModifiedThroughputValue 期望修改到的吞吐值
 3. ThresholdThroughputValue 修改动作的EBS的阈值(如果在此值之下则不会触发修改动作)
-4. TargetInstanceName EC2 名称,如果启动的实例名称(Name)中包括了这个名字,则会做修改动作
+4. TargetInstanceName EC2 名称,如果启动的实例名称(Tag:Name)中包括了这个名字,则会做修改动作

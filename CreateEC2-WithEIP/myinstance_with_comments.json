@@ -1,0 +1,35 @@
+注释版本:仅做参考,不可直接用
+{
+  "ImageId": "ami-085aadb9099d3670f", //实例的AMI ID,在已创建的实例的实例详细信息中可以查到
+  "InstanceType": "t3.large",
+  "MinCount": 1,
+  "MaxCount": 1,
+  "KeyName": "UW2", //登录需要的SSH key名称
+  "SecurityGroupIds": ["sg-0d4c32e795ff95ea1"], //安全组名称,必须在需要的VPC里提前创建好
+  "BlockDeviceMappings": [
+    {
+        "DeviceName": "/dev/xvda",
+        "Ebs": {
+            "VolumeSize": 15,
+            "DeleteOnTermination": true,
+            "VolumeType": "gp3",
+            "Encrypted": false
+        }
+    }
+],
+  "TagSpecifications": [
+      {
+          "ResourceType": "instance",
+          "Tags": [
+              {
+                  "Key": "Name",
+                  "Value": "EC2client" //EC2的名称
+              }
+          ]
+      }
+  ],
+  "SubnetId": "subnet-03460e0e4a380ba5d", //所在的子网组,也必须提前创建好,如果需要多AZ部署,则需要修改后再创建
+  "IamInstanceProfile": {
+    "Arn": "arn:aws:iam::你的账号:instance-profile/myInstanceProfile"
+    }
+}

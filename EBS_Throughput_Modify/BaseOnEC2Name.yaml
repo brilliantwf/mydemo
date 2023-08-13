@@ -184,15 +184,16 @@ Resources:
               response = ec2.describe_instances(InstanceIds=[instance_id])
               instance = response['Reservations'][0]['Instances'][0]
               instance_name = get_instance_name(instance)
-              print (f"当前实例名称为:{instance_name}")
+              print (f"Current instance name is:{instance_name}")
               volume_id = get_ebs_volume_id(instance_id)
               if instance_name:
                   # Determine if EBS throughput needs to be modified based on instance name
                   if target_ec2_name in instance_name.lower():
                       throughput_value = int(os.environ['throughput_value'])  # Modify throughput
-                      modify_ebs_throughput(volume_id,throughput_value)
+                      IOPS_value = int(os.environ['IOPS_value']) # Modify IOPS
+                      modify_ebs_throughput_and_iops(volume_id,throughput_value,IOPS_value)
                   else:
-                      print (f"名称中不包含{target_ec2_name},不修改吞吐")
+                      print (f"The name is not include {target_ec2_name},no changes")
 
 Outputs:
   EventBridgeRuleARN:

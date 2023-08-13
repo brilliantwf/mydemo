@@ -154,7 +154,7 @@ Resources:
               
               try:
                   response = ec2.describe_instances(InstanceIds=[instance_id])
-                  volume_id = response['Reservations'][0]['Instances'][0]['BlockDeviceMappings'][0]['Ebs']['VolumeId']
+                  volume_id = response['Reservations'][0]['Instances'][0]['BlockDeviceMappings'][-1]['Ebs']['VolumeId']
                   return volume_id
               except Exception as e:
                   print("Error:", e)

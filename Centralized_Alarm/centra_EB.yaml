@@ -15,8 +15,36 @@ Parameters:
     ConstraintDescription: Email address required.
     Description: Enter an email address you want to subscribe to the Amazon SNS topic
       that will send notifications if  Anomalies occur.
+  GuardDutyisEnabled:
+    Type: String
+    Default: "disabled"
+    AllowedValues: 
+    - "enabled"
+    - "disabled"
+    Description: GuardDuty has been enable in this Region?
+Conditions: 
+  IsGuardDutyEnabled: !Equals [ !Ref GuardDutyisEnabled, "disabled"]
 Resources:
+  EventBusPolicy0:
+    Type: AWS::Events::EventBusPolicy
+    Properties:
+      StatementId: allow_account_to_put_events
+      EventBusName: default
+      Statement:
+        Sid: allow_account_to_put_events
+        Effect: Allow
+        Principal:
+          AWS: '*'
+        Action: events:PutEvents
+        Resource:
+          Fn::Sub:
+            - arn:aws:events:${Region}:${AccountId}:event-bus/default
+            - Region:
+                Ref: AWS::Region
+              AccountId:
+                Ref: AWS::AccountId
   GuardDutyDetector:
+    Condition: IsGuardDutyEnabled
     Type: AWS::GuardDuty::Detector
     Properties: 
       Enable: True
@@ -28,7 +56,8 @@ Resources:
       - Endpoint:
           Ref: EmailAddress
         Protocol: email
-      TopicName: SNS-Message
+      TopicName: 
+        Fn::Sub: "${AWS::StackName}-SNS-Message"
   LoginEventsRule:
     Type: AWS::Events::Rule
     Properties:
@@ -154,10 +183,6 @@ Resources:
       Topics:
       - Ref: ActivitySNSTopic
 Outputs:
-  LoginEventsRule:
-    Value:
-      Ref: LoginEventsRule
-    Export:
-      Name:
-        Fn::Sub: "${AWS::StackName}-RootMonitorEventsRule"
-    Description: Event Rule ID.
+  EventBusArn:
+    Value: !Sub 'arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default'
+    Description: Default Eventbus Arn.

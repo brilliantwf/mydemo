@@ -17,13 +17,13 @@ Parameters:
       that will send notifications if  Anomalies occur.
   GuardDutyisEnabled:
     Type: String
-    Default: "disabled"
+    Default: "No"
     AllowedValues: 
-    - "enabled"
-    - "disabled"
+    - "Yes"
+    - "No"
     Description: GuardDuty has been enable in this Region?
 Conditions: 
-  IsGuardDutyEnabled: !Equals [ !Ref GuardDutyisEnabled, "disabled"]
+  IsGuardDutyEnabled: !Equals [ !Ref GuardDutyisEnabled, "No"]
 Resources:
   EventBusPolicy0:
     Type: AWS::Events::EventBusPolicy

@@ -84,5 +84,6 @@ https://us-east-1.console.aws.amazon.com/cloudformation/home?region=us-east-1#/s
 1. AWS Guardduty 介绍 https://aws.amazon.com/guardduty/
 2. AWS Eventbridge 介绍 https://aws.amazon.com/eventbridge/
 3. 多账号部署https://aws.amazon.com/blogs/security/deploy-aws-organizations-resources-by-using-cloudformation/
+4. 通知到 Feishu 机器人,可以参考sns2fs.zip 代码.
 
 
